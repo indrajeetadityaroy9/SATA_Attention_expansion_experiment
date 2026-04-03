@@ -1,6 +1,3 @@
-# BERT Attention Utility
-CLI tool for extracting and analyzing attention mechanisms from transformer models (BERT, RoBERTa, DistilBERT, ALBERT, ELECTRA)
+# SATA Attention
 
-- Extract attention weights, Q/K/V matrices, tokens, and attention rollout
-- Compute metrics: entropy, sparsity, attention distance, special token ratio, flow, Markov steady-state
-- Per-layer/per-head metric breakdowns
+Implementation of **Self-Attention at Constant Cost per Token via Symmetry-Aware Taylor Approximation** ([Heinsen and Kozachkov, 2026](https://arxiv.org/abs/2602.00294)).
