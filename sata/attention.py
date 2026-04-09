@@ -43,16 +43,14 @@ class SymmetryAwareTaylorApproximatedAttention(torch.nn.Module):
         S_terms, Z_terms = zip(*iter_over_tptts)
         S = torch.stack(S_terms, dim=0).sum(dim=0)
         Z = torch.stack(Z_terms, dim=0).sum(dim=0)
-        Y = torch.nan_to_num(S / Z)
+        Y = torch.nan_to_num(S / Z, nan=0.0, posinf=0.0, neginf=0.0)
         return Y
 
     def reset_state(self) -> None:
         """Clear accumulated states for starting a new sequence."""
         for tptt in self.tptts:
-            if hasattr(tptt, 'prev_H_S'):
-                del tptt.prev_H_S
-            if hasattr(tptt, 'prev_H_Z'):
-                del tptt.prev_H_Z
+            tptt.prev_H_S = None
+            tptt.prev_H_Z = None
 
     # Convenience methods:
 

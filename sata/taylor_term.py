@@ -33,8 +33,11 @@ class TightlyPackedTaylorTerm(torch.nn.Module):
         self.d_key, self.d_val, self.p, self.is_causal = (d_key, d_val, p, is_causal)
         self.register_buffer('alpha', torch.tensor(1.0 / (math.factorial(p) * (d_key ** (p / 2)))))
         self.register_buffer('M', generate_index_matrix(d_key, p))
-        self.register_buffer('C', calculate_multiplicity(self.M, d_key).float())
-        assert len(self.M) == math.comb(d_key + p - 1, p) and self.C.long().sum() == d_key ** p
+        C_long = calculate_multiplicity(self.M, d_key)
+        self.register_buffer('C', C_long.double())
+        assert len(self.M) == math.comb(d_key + p - 1, p) and sum(C_long.tolist()) == d_key ** p
+        self.prev_H_S = None
+        self.prev_H_Z = None
 
     def accumulate(self, summands: torch.Tensor) -> torch.Tensor:
         if self.is_causal:
@@ -62,10 +65,10 @@ class TightlyPackedTaylorTerm(torch.nn.Module):
             H_S_summands = V[..., None, :]                                    # [..., n_tok, 1, d_val]
             H_Z_summands = torch.ones_like(V[..., None, :1])                  # [..., n_tok, 1, 1]
 
-            H_S = self.accumulate(H_S_summands)                               # [..., (n or 1), 1, d_val]
-            H_Z = self.accumulate(H_Z_summands)                               # [..., (n or 1), 1, 1]
+            H_S = self.accumulate(H_S_summands) * self.alpha                  # [..., (n or 1), 1, d_val]
+            H_Z = self.accumulate(H_Z_summands) * self.alpha                  # [..., (n or 1), 1, 1]
 
-            if continue_prev:
+            if continue_prev and self.prev_H_S is not None:
                 H_S = self.prev_H_S + H_S
                 H_Z = self.prev_H_Z + H_Z
 
@@ -81,12 +84,13 @@ class TightlyPackedTaylorTerm(torch.nn.Module):
             H_S = self.accumulate(H_S_summands) * self.alpha                  # [..., (n or 1), m, d_val]
             H_Z = self.accumulate(H_Z_summands) * self.alpha                  # [..., (n or 1), m, 1]
 
-            if continue_prev:
+            if continue_prev and self.prev_H_S is not None:
                 H_S = self.prev_H_S + H_S
                 H_Z = self.prev_H_Z + H_Z
 
-            S_term = torch.einsum('m,...m,...md->...d', self.C, Phi_Q, H_S)   # [..., n_qry, d_val]
-            Z_term = torch.einsum('m,...m,...md->...d', self.C, Phi_Q, H_Z)   # [..., n_qry, 1]
+            C = self.C.to(Phi_Q.dtype)
+            S_term = torch.einsum('m,...m,...md->...d', C, Phi_Q, H_S)        # [..., n_qry, d_val]
+            Z_term = torch.einsum('m,...m,...md->...d', C, Phi_Q, H_Z)        # [..., n_qry, 1]
 
         self.prev_H_S = H_S[..., -1:, :, :].detach()                         # [..., 1, m, d_val]
         self.prev_H_Z = H_Z[..., -1:, :, :].detach()                         # [..., 1, m, 1]

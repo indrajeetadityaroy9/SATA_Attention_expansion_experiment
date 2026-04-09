@@ -28,10 +28,10 @@ def calculate_multiplicity(M: torch.Tensor, d_key: int) -> torch.Tensor:
 
     Returns long tensor of shape [m_p].
     """
-    log_factorial = lambda counts: torch.lgamma(counts + 1)
+    log_factorial = lambda counts: torch.lgamma(counts.double() + 1)
     vmap_bincount = torch.vmap(lambda row: torch.bincount(row, minlength=d_key))
     with warnings.catch_warnings(action="ignore"):
         bin_counts = vmap_bincount(M)
-    log_numer = log_factorial(torch.tensor(M.size(-1)))
+    log_numer = log_factorial(torch.tensor(M.size(-1), dtype=torch.float64))
     log_denoms = torch.sum(log_factorial(bin_counts), dim=-1)
     return torch.exp(log_numer - log_denoms).round().long()
